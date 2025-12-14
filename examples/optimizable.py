@@ -1,5 +1,3 @@
-# ejemplo_opt.py
-
 total = 0
 total = 1  # asignacion muerta (se pisa sin leerse)
 
@@ -9,7 +7,7 @@ for i in range(4):
     if 2 + 2 == 4:          # condicion constante true
         total = total + i
     else:
-        total = total - 999 # inalcanzable
+        total = total - 999  # inalcanzable
 
     if False:               # condicion constante false
         basura = i * 100    # inalcanzable
