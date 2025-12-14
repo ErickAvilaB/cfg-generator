@@ -67,11 +67,13 @@ class NodoCFG(dict):
         return unparse(self.nodo_ast).strip()
 
     def agregar_hijo(self, hijo: "NodoCFG") -> None:
-        if hijo not in self.hijos:
+        # NodoCFG hereda de dict. Dos nodos "vacios" comparan iguales ({ } == { }),
+        # asi que no se debe usar `in` directo para evitar duplicados.
+        if not any(h is hijo for h in self.hijos):
             self.hijos.append(hijo)
 
     def agregar_padre(self, padre: "NodoCFG") -> None:
-        if padre not in self.padres:
+        if not any(p is padre for p in self.padres):
             self.padres.append(padre)
 
     def agregar_padres(self, padres) -> None:
@@ -463,7 +465,9 @@ def _evaluar_constante(expr: ast.AST) -> Optional[object]:
 def _es_nodo_de_condicion(nodo: NodoCFG) -> Optional[ast.AST]:
     if isinstance(nodo.nodo_ast, ast.AnnAssign) and isinstance(nodo.nodo_ast.target, ast.Name):
         nombre = nodo.nodo_ast.target.id
-        if nombre in {"_if", "_while", "_elif", "_for"}:
+        # Nota: el "_for" es una convencion interna para modelar el for como decision,
+        # pero su "condicion" no significa lo mismo que en if/while, asi que no se evalua.
+        if nombre in {"_if", "_while", "_elif"}:
             return nodo.nodo_ast.annotation
     return None
 
@@ -624,7 +628,7 @@ def construir_grafo(cache: Dict[int, NodoCFG], aristas_imposibles: Set[Tuple[int
 def agregar_leyenda_si_aplica(grafo: pygraphviz.AGraph, cache: Dict[int, NodoCFG]) -> None:
     """Agrega una leyenda al grafo cuando existe algo que resaltar.
 
-    La leyenda se coloca abajo a la derecha para que sea facil de leer.
+    La leyenda se coloca al final (rank sink) para que sea facil de leer.
     """
 
     hay_marcas = any(bool(n.get("marcas")) for n in cache.values())
@@ -644,56 +648,21 @@ def agregar_leyenda_si_aplica(grafo: pygraphviz.AGraph, cache: Dict[int, NodoCFG
         '</TABLE>>'
     )
 
-    nombre_leyenda = 'leyenda'
-    nombre_ancla = 'ancla_leyenda'
-    nombre_empuje = 'empuje_leyenda'
-
-    grafo.add_node(nombre_leyenda)
-    nodo = grafo.get_node(nombre_leyenda)
+    nombre = 'leyenda'
+    grafo.add_node(nombre)
+    nodo = grafo.get_node(nombre)
     nodo.attr['shape'] = 'plaintext'
     nodo.attr['label'] = etiqueta
 
-    # Nodo ancla invisible: ayuda a empujar la leyenda hacia la esquina inferior derecha.
-    grafo.add_node(nombre_ancla)
-    ancla = grafo.get_node(nombre_ancla)
-    ancla.attr['shape'] = 'point'
-    ancla.attr['label'] = ''
-    ancla.attr['width'] = '0.01'
-    ancla.attr['height'] = '0.01'
-    ancla.attr['style'] = 'invis'
-
-    # Nodo extra (invisible) para empujar un poco mas la leyenda hacia la derecha.
-    grafo.add_node(nombre_empuje)
-    empuje = grafo.get_node(nombre_empuje)
-    empuje.attr['shape'] = 'box'
-    empuje.attr['label'] = ''
-    empuje.attr['style'] = 'invis'
-    empuje.attr['fixedsize'] = 'true'
-    empuje.attr['width'] = '1.6'
-    empuje.attr['height'] = '0.02'
-
-    sub = grafo.add_subgraph(
-        [nombre_ancla, nombre_empuje, nombre_leyenda], name='sub_leyenda')
+    sub = grafo.add_subgraph([nombre], name='sub_leyenda')
     sub.graph_attr['rank'] = 'sink'
 
-    # Conecta de forma invisible desde el nodo final para que la leyenda tienda a caer abajo a la derecha.
-    # Si no encontramos un "stop", usamos el id mas grande (suele quedar al final del flujo).
-    id_ancla = None
-    for k, n in cache.items():
-        if _resumir_texto(n.fuente()) == 'stop':
-            id_ancla = k
-            break
-    if id_ancla is None:
-        try:
-            id_ancla = max(int(k) for k in cache.keys())
-        except Exception:
-            id_ancla = None
-
-    if id_ancla is not None:
-        grafo.add_edge(str(id_ancla), nombre_ancla, style='invis', weight=1000)
-        grafo.add_edge(nombre_ancla, nombre_empuje, style='invis', weight=1000)
-        grafo.add_edge(nombre_empuje, nombre_leyenda,
-                       style='invis', weight=1000)
+    # Conecta de forma invisible para estabilizar la disposicion.
+    try:
+        inicio = min(int(k) for k in cache.keys())
+        grafo.add_edge(str(inicio), nombre, style='invis')
+    except Exception:
+        pass
 
 
 def reiniciar_estado_global() -> None:
