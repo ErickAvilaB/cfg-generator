@@ -551,7 +551,6 @@ def marcar_partes_optimizables(inicio: NodoCFG, cache: Dict[int, NodoCFG]) -> Tu
 def _atributos_de_nodo(marcas: Set[str]) -> Dict[str, str]:
     """Define estilo visual de un nodo segun sus marcas."""
     attrs: Dict[str, str] = {}
-    # Abuso controlado de ifs para que la grafica del propio programa tenga estructura.
     if "INALCANZABLE" in marcas:
         attrs["style"] = "filled"
         attrs["fillcolor"] = "gray90"
